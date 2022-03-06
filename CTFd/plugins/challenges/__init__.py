@@ -53,6 +53,7 @@ class BaseChallenge(object):
             "name": challenge.name,
             "value": challenge.value,
             "description": challenge.description,
+            "connection_info": challenge.connection_info,
             "category": challenge.category,
             "state": challenge.state,
             "max_attempts": challenge.max_attempts,
@@ -123,7 +124,7 @@ class BaseChallenge(object):
                 if get_flag_class(flag.type).compare(flag, submission):
                     return True, "Correct"
             except FlagException as e:
-                return False, e.message
+                return False, str(e)
         return False, "Incorrect"
 
     @classmethod

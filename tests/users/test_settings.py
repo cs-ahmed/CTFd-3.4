@@ -15,11 +15,11 @@ def test_user_set_profile():
 
         data = {
             "name": "user",
-            "email": "user@ctfd.io",
+            "email": "user@examplectf.com",
             "confirm": "",
             "password": "",
             "affiliation": "affiliation_test",
-            "website": "https://ctfd.io",
+            "website": "https://examplectf.com",
             "country": "US",
         }
 
@@ -33,12 +33,12 @@ def test_user_set_profile():
 
         r = client.get("/settings")
         resp = r.get_data(as_text=True)
-        for k, v in data.items():
+        for _k, v in data.items():
             assert v in resp
 
         data = {
             "name": "user",
-            "email": "user@ctfd.io",
+            "email": "user@examplectf.com",
             "confirm": "",
             "password": "",
             "affiliation": "",
@@ -65,7 +65,7 @@ def test_user_can_change_password():
 
         data = {
             "name": "user",
-            "email": "user@ctfd.io",
+            "email": "user@examplectf.com",
             "confirm": "",
             "password": "new_password",
             "affiliation": "",

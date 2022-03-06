@@ -1,7 +1,7 @@
 import base64
 
 import requests
-from flask import Blueprint
+from flask import Blueprint, abort
 from flask import current_app as app
 from flask import redirect, render_template, request, session, url_for
 from itsdangerous.exc import BadSignature, BadTimeSignature, SignatureExpired
@@ -81,6 +81,7 @@ def confirm(data=None):
             log(
                 "registrations",
                 format="[{date}] {ip} - {name} initiated a confirmation email resend",
+                name=user.name,
             )
             return render_template(
                 "confirm.html", infos=[f"Confirmation email sent to {user.email}!"]
@@ -140,7 +141,7 @@ def reset_password(data=None):
             clear_user_session(user_id=user.id)
             log(
                 "logins",
-                format="[{date}] {ip} -  successful password reset for {name}",
+                format="[{date}] {ip} - successful password reset for {name}",
                 name=user.name,
             )
             db.session.close()
@@ -196,6 +197,7 @@ def register():
         website = request.form.get("website")
         affiliation = request.form.get("affiliation")
         country = request.form.get("country")
+        registration_code = str(request.form.get("registration_code", ""))
 
         name_len = len(name) == 0
         names = Users.query.add_columns("name", "id").filter_by(name=name).first()
@@ -208,6 +210,13 @@ def register():
         pass_long = len(password) > 128
         valid_email = validators.validate_email(email_address)
         team_name_email_check = validators.validate_email(name)
+
+        if get_config("registration_code"):
+            if (
+                registration_code.lower()
+                != str(get_config("registration_code", default="")).lower()
+            ):
+                errors.append("The registration code you entered was incorrect")
 
         # Process additional user fields
         fields = {}
@@ -323,6 +332,8 @@ def register():
                     log(
                         "registrations",
                         format="[{date}] {ip} - {name} registered (UNCONFIRMED) with {email}",
+                        name=user.name,
+                        email=user.email,
                     )
                     email.verify_email_address(user.email)
                     db.session.close()
@@ -333,7 +344,12 @@ def register():
                     ):  # We want to notify the user that they have registered.
                         email.successful_registration_notification(user.email)
 
-        log("registrations", "[{date}] {ip} - {name} registered with {email}")
+        log(
+            "registrations",
+            format="[{date}] {ip} - {name} registered with {email}",
+            name=user.name,
+            email=user.email,
+        )
         db.session.close()
 
         if is_teams_mode():
@@ -358,11 +374,18 @@ def login():
             user = Users.query.filter_by(name=name).first()
 
         if user:
+            if user.password is None:
+                errors.append(
+                    "Your account was registered with a 3rd party authentication provider. "
+                    "Please try logging in with a configured authentication provider."
+                )
+                return render_template("login.html", errors=errors)
+
             if user and verify_password(request.form["password"], user.password):
                 session.regenerate()
 
                 login_user(user)
-                log("logins", "[{date}] {ip} - {name} logged in")
+                log("logins", "[{date}] {ip} - {name} logged in", name=user.name)
 
                 db.session.close()
                 if request.args.get("next") and validators.is_safe_url(
@@ -373,7 +396,11 @@ def login():
 
             else:
                 # This user exists but the password is wrong
-                log("logins", "[{date}] {ip} - submitted invalid password for {name}")
+                log(
+                    "logins",
+                    "[{date}] {ip} - submitted invalid password for {name}",
+                    name=user.name,
+                )
                 errors.append("Your username or password is incorrect")
                 db.session.close()
                 return render_template("login.html", errors=errors)
@@ -491,6 +518,16 @@ def oauth_redirect():
 
                 team = Teams.query.filter_by(oauth_id=team_id).first()
                 if team is None:
+                    num_teams_limit = int(get_config("num_teams", default=0))
+                    num_teams = Teams.query.filter_by(
+                        banned=False, hidden=False
+                    ).count()
+                    if num_teams_limit and num_teams >= num_teams_limit:
+                        abort(
+                            403,
+                            description=f"Reached the maximum number of teams ({num_teams_limit}). Please join an existing team.",
+                        )
+
                     team = Teams(name=team_name, oauth_id=team_id, captain_id=user.id)
                     db.session.add(team)
                     db.session.commit()

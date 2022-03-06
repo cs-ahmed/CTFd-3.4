@@ -12,4 +12,8 @@ CTFd/uploads/**/*
 .gitignore
 .prettierignore
 .travis.yml
-node_modules
+**/node_modules
+**/*.pyc
+**/__pycache__
+.venv*
+venv*

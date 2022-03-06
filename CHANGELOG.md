@@ -1,3 +1,198 @@
+# 3.4.1 / 2022-02-19
+
+**General**
+
+- Make session cookies persist in the browser after close
+- Fix issue where all-numeric registration codes wouldn't work
+- Fix issue where a user's session isn't cleared properly after they are deleted by an admin
+- Fix issue where CTF end time couldn't be set during setup
+
+**API**
+
+- Improved speed of the `/api/v1/challenges/[challenge_id]/solves` endpoint
+- Document API authentication and `Content-Type` header requirement
+- Add nested `UserSchema` and `TeamSchema` to `SubmissionSchema` for easier access to account name
+
+**Admin Panel**
+
+- Improve CSV import error reporting and validation
+- Fix non-clickable checkbox label in user creation form in Admin Panel
+- Allow submissions per minute ratelimit to be configurable in Admin Panel
+- Add a link in the Pages Editor to the [Page Variables documentation page](https://docs.ctfd.io/docs/pages/variables/)
+
+**Themes**
+
+- Fix issue where invalid `theme_settings` can cause broken frontend
+- Replace `node-sass` with `sass` and upgrade `sass-loader`
+
+**Deployment**
+
+- Serve all assets from CTFd regardless of internet availability (i.e. fonts and font-awesome)
+- Fix regression in `REVERSE_PROXY` to allow comma seperated integers
+- Bump `flask-restx` to 0.5.1
+- Bump `pybluemonday` to 0.0.9
+- Added support for S3 signature version 4 authentication to support alternative S3 buckets (Google Cloud Storage, DigitalOcean Spaces, etc)
+
+**Miscellaneous**
+
+- Add a Github Actions job to publish Docker images to Dockerhub and ghcr
+
+# 3.4.0 / 2021-08-11
+
+**General**
+
+- Added the ability to have Challenge Topics
+  - Challenge Topics are small topic strings which are only visible to Admins
+  - They should denote what topics a given challenge involves
+- Added `connection_info` to Challenges to allow Admins to more easily specify the connection info for a challenge
+- Added ability to import CSVs of users, teams, and challenges
+- Added ability to limit the total number of teams
+- Pages now have access to variables `ctf_name`, `ctf_description`, `ctf_start`, `ctf_end`, `ctf_freeze`. (e.g. `{{ ctf_name }}`)
+- IP Addresses in the Admin Panel will now show the city of the IP address as well as the country
+- Make User Mode it's own dedicated tab in the setup flow and more clearly explain what each user mode does
+- Added the ability to have a registration password
+  - Does not currently apply to SSO/auth provider or API based account creation
+- Prevent users from participating with challenges if their profile is not complete (i.e. haven't filled out all required custom fields)
+- Fixed an issue where admins couldn't see some challenges in the add requirements interface
+- Fixed an issue where a challenge couldn't be accessed beacuse it had prerequisites on a deleted challenge
+- Fixed an issue where User profiles could not be loaded in the Admin Panel due to missing/invalid Tracking IP addresses
+- Fixed an issue where users with authentication provider accoutns would get an error when attempting to login
+- Fixed an issue where MajorLeagueCyber config from config.ini was not being respected
+
+**API**
+
+- Added `connection_info` field to `/api/v1/challenges/[challenge_id]`
+- Added `/api/v1/topics` for admins to create/delete topics
+- Added `/api/v1/challenges/[challenge_id]/topics` for admins to list the topics on a challenge
+- `/api/v1/challenges` will now sort by ID as value to better standardize API output with different databases
+- `/api/v1/configs` will now provide an error message when provided Config values are too long
+- `PATCH /api/v1/teams/[team_id]` will now only let team members be team captain
+  - No security issues here, it would just be invalid data.
+
+**Themes**
+
+- CTFd now has the `THEME_FALLBACK` option enabled by default. This allows users to provide incomplete themes. Missing theme files will be provided from the built-in core theme
+- CTFd will now pass the title of a Page over to the template when rendering
+- No longer show the token type in user settings
+- Added `window.BETA_sortChallenges` to `/challenges` so that theme code can more easily define how to sort challenges
+  - Note that this functionality is beta because we expect to revamp the entire themes system
+- Added `window.updateChallengeBoard` to `/challenges` so that theme code can more easily define when to update challenges
+  - Note that this functionality is beta because we expect to revamp the entire themes system
+- Added `window.updateScoreboard` to `/scoreboard` so that theme code can more easily define when to update the scoreboard
+  - Note that this functionality is beta because we expect to revamp the entire themes system
+
+**Plugins**
+
+- Added `Challenges.plugin_class` to the Challenges model to access the challenge type plugin class from the Model
+  - Allows templates to access the plugin class more easily
+  - Allows plugins to access the plugin class without having to load the class explicitly
+
+**Admin Panel**
+
+- Reworked the Challenge Requirements UI
+  - Officially support the concept of anonymized challenges if prerequisites aren't met
+- Added ability for Pages to be written in direct HTML instead of Markdown
+- Pages now have access to variables `ctf_name`, `ctf_description`, `ctf_start`, `ctf_end`, `ctf_freeze`
+  - `ctf_start`, `ctf_end`, `ctf_freeze` are represented as ISO8601 timestamps
+- Make it easier to change the user mode without having to delete all accounts. Instead we will only delete all submissions.
+- When in team mode, user pages will now show their team's score instead of their own personal score
+- Show a team member's individual score on their team's page
+- Made the challenge creation form wider
+
+**Deployment**
+
+- The `THEME_FALLBACK` config is now set to true by default
+- Replace installation and usage of `mysqladmin` (specifically `mysqladmin ping`) with a custom Python script
+- Bump version of `pybluemonday` to 0.0.7 (fixes HTML sanitization bypasses and allows comments in HTML)
+- Bump `pydantic` from 1.5.1 to 1.6.2
+
+**Miscellaneous**
+
+- Make `.dockerignore` ignore `node_modules` in any subdirectory
+- Added `solves` and `solved_by_me` fields to the Swagger documentation for Challenges
+- Dynamic challenges will now take their initial valuation from the `inital` keyword instead of the previous `value` keyword.
+  - This allows ctfcli to manage dynamic challenges. See https://github.com/CTFd/CTFd/issues/1875
+- Added a timestamp to a CTFd export's filename
+- Deleting uploads under the Filesystem upload provider will now delete the parent folder as well as the target file
+
+# 3.3.1 / 2021-07-15
+
+**Security**
+
+- Fixes an issue where users could join teams without knowing the team password or having a team invite
+
+# 3.3.0 / 2021-03-26
+
+**General**
+
+- Don't require a team for viewing challenges if Challenge visibility is set to public
+- Add a `THEME_FALLBACK` config to help develop themes. See **Themes** section for details.
+
+**API**
+
+- Implement a faster `/api/v1/scoreboard` endpoint in Teams Mode
+- Add the `solves` item to both `/api/v1/challenges` and `/api/v1/challenges/[challenge_id]` to more easily determine how many solves a challenge has
+- Add the `solved_by_me` item to both `/api/v1/challenges` and `/api/v1/challenges/[challenge_id]` to more easily determine if the current account has solved the challenge
+- Prevent admins from deleting themselves through `DELETE /api/v1/users/[user_id]`
+- Add length checking to some sensitive fields in the Pages and Challenges schemas
+- Fix issue where `PATCH /api/v1/users[user_id]` returned a list instead of a dict
+- Fix exception that occured on demoting admins through `PATCH /api/v1/users[user_id]`
+- Add `team_id` to `GET /api/v1/users` to determine if a user is already in a team
+- Provide a more useful error message when using an expired token
+
+**Themes**
+
+- Add a `THEME_FALLBACK` config to help develop themes.
+  - `THEME_FALLBACK` will configure CTFd to try to find missing theme files in the default built-in `core` theme.
+  - This makes it easier to develop themes or use incomplete themes.
+- Allow for one theme to reference and inherit from another theme through approaches like `{% extends "core/page.html" %}`
+- Allow for the automatic date rendering format to be overridden by specifying a `data-time-format` attribute.
+- Add styling for the `<blockquote>` element.
+- Change `users/private.html`, `users/public.html` to show awards before a user gets a solve
+- Change `teams/private.html`, `teams/public.html` to show awards before a team gets a solve
+- Change `colorHash` function to use HSL color values to avoid generating too light/dark colors
+- Fix an issue where hidden users couldn't see their graphing data on their private user page (`/user`)
+- Fix scoreboard table identifier to switch between User/Team depending on configured user mode
+- Switch the challenges page in core to use the new API information in `/api/v1/challenges` to mark solves and display solve counts
+- Switch to using Bootstrap's scss in `core/main.scss` to allow using Bootstrap variables
+- Consolidate Jinja error handlers into a single function and better handle issues where error templates can't be found
+
+**Plugins**
+
+- Set plugin migration version after successful migrations
+- Fix issue where Page URLs injected into the navbar were relative instead of absolute
+
+**Admin Panel**
+
+- Add User standings as well as Teams standings to the admin scoreboard when in Teams Mode
+- Add a UI for adding members to a team from the team's admin page
+- Add ability for admins to disable public team creation
+- Link directly to users who submitted something in the submissions page if the CTF is in Teams Mode
+- Fix Challenge Requirements interface in Admin Panel to not allow empty/null requirements to be added
+- Fixed an issue where config times (start, end, freeze times) could not be removed
+- Fix an exception that occurred when demoting an Admin user
+- Adds a temporary hack for re-enabling Javascript snippets in Flag editor templates. (See #1779)
+
+**Deployment**
+
+- Fix boolean configs from the `config.ini` optional section
+- Install `python3-dev` instead of `python-dev` in apt
+- Require `pybluemonday` as pip dependency
+- Remove `lxml` and `html5lib` from pip dependencies
+- Bump `Jinja2` to 2.11.3
+- Bump `pip-tools` to 5.4.0
+
+**Miscellaneous**
+
+- Rewrite the HTML santiziation feature (controlled by `HTML_SANITIZATION`) to use the `pybluemonday` library instead of `lxml`/`html5lib`
+  - Note that this feature is still in beta
+- Cache Docker builds more by copying and installing Python dependencies before copying CTFd
+- Change the default emails slightly and rework confirmation email page to make some recommendations clearer
+- Use `examplectf.com` as testing/development domain instead of `ctfd.io`
+- Fix issue where user's name and email would not appear in logs properly
+- Add more linting by also linting with `flake8-comprehensions` and `flake8-bugbear`
+- Add `.pyc` files and `__pycache__` to `.dockerignore`
+
 # 3.2.1 / 2020-12-09
 
 - Fixed an issue where Users could not unlock Hints

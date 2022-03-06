@@ -4,6 +4,7 @@ from flask import Blueprint, abort
 from flask import current_app as app
 from flask import redirect, render_template, request, send_file, session, url_for
 from flask.helpers import safe_join
+from jinja2.exceptions import TemplateNotFound
 from sqlalchemy.exc import IntegrityError
 
 from CTFd.cache import cache
@@ -14,6 +15,7 @@ from CTFd.constants.config import (
     RegistrationVisibilityTypes,
     ScoreVisibilityTypes,
 )
+from CTFd.constants.themes import DEFAULT_THEME
 from CTFd.models import (
     Admins,
     Files,
@@ -27,8 +29,8 @@ from CTFd.models import (
 from CTFd.utils import config, get_config, set_config
 from CTFd.utils import user as current_user
 from CTFd.utils import validators
-from CTFd.utils.config import is_setup
-from CTFd.utils.config.pages import build_html, get_page
+from CTFd.utils.config import is_setup, is_teams_mode
+from CTFd.utils.config.pages import build_markdown, get_page
 from CTFd.utils.config.visibility import challenges_visible
 from CTFd.utils.dates import ctf_ended, ctftime, view_after_ctf
 from CTFd.utils.decorators import authed_only
@@ -54,7 +56,7 @@ from CTFd.utils.security.signing import (
     unserialize,
 )
 from CTFd.utils.uploads import get_uploader, upload_file
-from CTFd.utils.user import authed, get_current_user, is_admin
+from CTFd.utils.user import authed, get_current_team, get_current_user, is_admin
 
 views = Blueprint("views", __name__)
 
@@ -85,7 +87,7 @@ def setup():
                 f = upload_file(file=ctf_small_icon)
                 set_config("ctf_small_icon", f.location)
 
-            theme = request.form.get("ctf_theme", "core")
+            theme = request.form.get("ctf_theme", DEFAULT_THEME)
             set_config("ctf_theme", theme)
             theme_color = request.form.get("theme_color")
             theme_header = get_config("theme_header")
@@ -255,7 +257,12 @@ def setup():
                 cache.clear()
 
             return redirect(url_for("views.static_html"))
-        return render_template("setup.html", state=serialize(generate_nonce()))
+        try:
+            return render_template("setup.html", state=serialize(generate_nonce()))
+        except TemplateNotFound:
+            # Set theme to default and try again
+            set_config("ctf_theme", DEFAULT_THEME)
+            return render_template("setup.html", state=serialize(generate_nonce()))
     return redirect(url_for("views.static_html"))
 
 
@@ -297,6 +304,7 @@ def notifications():
 @authed_only
 def settings():
     infos = get_infos()
+    errors = get_errors()
 
     user = get_current_user()
     name = user.name
@@ -304,6 +312,14 @@ def settings():
     website = user.website
     affiliation = user.affiliation
     country = user.country
+
+    if is_teams_mode() and get_current_team() is None:
+        team_url = url_for("teams.private")
+        infos.append(
+            markup(
+                f'In order to participate you must either <a href="{team_url}">join or create a team</a>.'
+            )
+        )
 
     tokens = UserTokens.query.filter_by(user_id=user.id).all()
 
@@ -329,6 +345,7 @@ def settings():
         tokens=tokens,
         prevent_name_change=prevent_name_change,
         infos=infos,
+        errors=errors,
     )
 
 
@@ -347,7 +364,7 @@ def static_html(route):
         if page.auth_required and authed() is False:
             return redirect(url_for("auth.login", next=request.full_path))
 
-        return render_template("page.html", content=page.content)
+        return render_template("page.html", content=page.html, title=page.title)
 
 
 @views.route("/tos")
@@ -357,7 +374,7 @@ def tos():
     if tos_url:
         return redirect(tos_url)
     elif tos_text:
-        return render_template("page.html", content=build_html(tos_text))
+        return render_template("page.html", content=build_markdown(tos_text))
     else:
         abort(404)
 
@@ -369,7 +386,7 @@ def privacy():
     if privacy_url:
         return redirect(privacy_url)
     elif privacy_text:
-        return render_template("page.html", content=build_html(privacy_text))
+        return render_template("page.html", content=build_markdown(privacy_text))
     else:
         abort(404)
 
@@ -449,8 +466,12 @@ def themes(theme, path):
     :param path:
     :return:
     """
-    filename = safe_join(app.root_path, "themes", theme, "static", path)
-    if os.path.isfile(filename):
-        return send_file(filename)
-    else:
-        abort(404)
+    for cand_path in (
+        safe_join(app.root_path, "themes", cand_theme, "static", path)
+        # The `theme` value passed in may not be the configured one, e.g. for
+        # admin pages, so we check that first
+        for cand_theme in (theme, *config.ctf_theme_candidates())
+    ):
+        if os.path.isfile(cand_path):
+            return send_file(cand_path)
+    abort(404)

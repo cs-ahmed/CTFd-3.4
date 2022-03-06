@@ -76,7 +76,7 @@ def test_viewing_challenge():
 #         # Generate 5 users
 #         for c in range(1, 6):
 #             name = "user{}".format(c)
-#             email = "user{}@ctfd.io".format(c)
+#             email = "user{}@examplectf.com".format(c)
 #             register_user(app, name=name, email=email, password="password")
 #
 #         # Generate 5 challenges
@@ -252,7 +252,7 @@ def test_challenges_with_max_attempts():
         app.db.session.commit()
 
         gen_flag(app.db, challenge_id=chal.id, content=u"flag")
-        for x in range(3):
+        for _ in range(3):
             data = {"submission": "notflag", "challenge_id": chal_id}
             r = client.post("/api/v1/challenges/attempt", json=data)
 
@@ -282,7 +282,7 @@ def test_challenge_kpm_limit():
         chal_id = chal.id
 
         gen_flag(app.db, challenge_id=chal.id, content=u"flag")
-        for x in range(11):
+        for _ in range(11):
             with client.session_transaction():
                 data = {"submission": "notflag", "challenge_id": chal_id}
             r = client.post("/api/v1/challenges/attempt", json=data)
@@ -394,6 +394,47 @@ def test_hidden_challenge_is_unsolveable():
 
         wrong_keys = Fails.query.count()
         assert wrong_keys == 0
+    destroy_ctfd(app)
+
+
+def test_invalid_requirements_are_rejected():
+    """Test that invalid requirements JSON blobs are rejected by the API"""
+    app = create_ctfd()
+    with app.app_context():
+        gen_challenge(app.db)
+        gen_challenge(app.db)
+        with login_as_user(app, "admin") as client:
+            # Test None/null values
+            r = client.patch(
+                "/api/v1/challenges/1", json={"requirements": {"prerequisites": [None]}}
+            )
+            assert r.status_code == 400
+            assert r.get_json() == {
+                "success": False,
+                "errors": {
+                    "requirements": [
+                        "Challenge requirements cannot have a null prerequisite"
+                    ]
+                },
+            }
+            # Test empty strings
+            r = client.patch(
+                "/api/v1/challenges/1", json={"requirements": {"prerequisites": [""]}}
+            )
+            assert r.status_code == 400
+            assert r.get_json() == {
+                "success": False,
+                "errors": {
+                    "requirements": [
+                        "Challenge requirements cannot have a null prerequisite"
+                    ]
+                },
+            }
+            # Test a valid integer
+            r = client.patch(
+                "/api/v1/challenges/1", json={"requirements": {"prerequisites": [2]}}
+            )
+            assert r.status_code == 200
     destroy_ctfd(app)
 
 

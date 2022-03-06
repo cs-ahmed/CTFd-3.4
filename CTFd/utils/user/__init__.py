@@ -95,7 +95,7 @@ def get_current_team():
 def get_current_team_attrs():
     if authed():
         user = get_user_attrs(user_id=session["id"])
-        if user.team_id:
+        if user and user.team_id:
             return get_team_attrs(team_id=user.team_id)
     return None
 
@@ -182,7 +182,7 @@ def get_user_recent_ips(user_id):
         .filter(Tracking.user_id == user_id, Tracking.date >= hour_ago)
         .all()
     )
-    return set([ip for (ip,) in addrs])
+    return {ip for (ip,) in addrs}
 
 
 def get_wrong_submissions_per_minute(account_id):
